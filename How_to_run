@@ -1,0 +1,175 @@
+To run the web application, you need to set up your development environment and execute the provided Python script. Here are the detailed steps:
+
+Step-by-Step Guide to Run the Application
+Install Python:
+Make sure you have Python installed on your system. You can download it from python.org.
+
+Set Up a Virtual Environment (Optional but Recommended):
+It's a good practice to create a virtual environment for your project to manage dependencies.
+
+bash
+Copy code
+python -m venv venv
+source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+Install Flask and Pandas:
+Use pip to install Flask and pandas.
+
+bash
+Copy code
+pip install Flask pandas
+Create the Project Files:
+Create the necessary files for the project.
+
+app.py (Main application script)
+templates/index.html (HTML file for the front end)
+File Structure:
+
+markdown
+Copy code
+project/
+├── app.py
+└── templates/
+    └── index.html
+Copy the Provided Code:
+
+app.py:
+
+python
+Copy code
+from flask import Flask, request, render_template, send_file
+import pandas as pd
+import os
+
+app = Flask(__name__)
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/upload', methods=['POST'])
+def upload_files():
+    group_file = request.files['groupFile']
+    hostel_file = request.files['hostelFile']
+    
+    group_df = pd.read_csv(group_file)
+    hostel_df = pd.read_csv(hostel_file)
+    
+    allocation = allocate_rooms(group_df, hostel_df)
+    
+    output_csv = 'allocation_result.csv'
+    allocation.to_csv(output_csv, index=False)
+    
+    return send_file(output_csv, as_attachment=True)
+
+def allocate_rooms(group_df, hostel_df):
+    allocation_results = pd.DataFrame(columns=['Group ID', 'Hostel Name', 'Room Number', 'Members Allocated'])
+
+    for _, group in group_df.iterrows():
+        group_id = group['Group ID']
+        members = group['Members']
+        gender = group['Gender']
+        
+        if '&' in gender:
+            boys, girls = map(int, gender.split(' & '))
+        else:
+            boys, girls = (members, 0) if 'Boys' in gender else (0, members)
+
+        if boys > 0:
+            boys_alloc = allocate_group_to_hostel(group_id, boys, 'Boys', hostel_df, allocation_results)
+            allocation_results = pd.concat([allocation_results, boys_alloc], ignore_index=True)
+
+        if girls > 0:
+            girls_alloc = allocate_group_to_hostel(group_id, girls, 'Girls', hostel_df, allocation_results)
+            allocation_results = pd.concat([allocation_results, girls_alloc], ignore_index=True)
+
+    return allocation_results
+
+def allocate_group_to_hostel(group_id, members, gender, hostel_df, allocation_results):
+    available_rooms = hostel_df[(hostel_df['Gender'] == gender) & (hostel_df['Capacity'] >= members)]
+
+    allocation = []
+    
+    while members > 0:
+        if available_rooms.empty:
+            raise ValueError(f"No available rooms for {gender} group ID {group_id} with {members} members")
+
+        room = available_rooms.iloc[0]
+        room_capacity = room['Capacity']
+        hostel_name = room['Hostel Name']
+        room_number = room['Room Number']
+
+        if members <= room_capacity:
+            allocation.append([group_id, hostel_name, room_number, members])
+            members = 0
+        else:
+            allocation.append([group_id, hostel_name, room_number, room_capacity])
+            members -= room_capacity
+            available_rooms = available_rooms.iloc[1:]
+
+    for _, row in allocation:
+        hostel_df = hostel_df[(hostel_df['Hostel Name'] != row[1]) | (hostel_df['Room Number'] != row[2])]
+
+    return pd.DataFrame(allocation, columns=['Group ID', 'Hostel Name', 'Room Number', 'Members Allocated'])
+
+if __name__ == '__main__':
+    app.run(debug=True)
+templates/index.html:
+
+html
+Copy code
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Hostel Allocation</title>
+</head>
+<body>
+    <h1>Upload Group and Hostel Information</h1>
+    <form action="/upload" method="post" enctype="multipart/form-data">
+        <label for="groupFile">Group Information CSV:</label>
+        <input type="file" id="groupFile" name="groupFile" accept=".csv" required><br><br>
+        <label for="hostelFile">Hostel Information CSV:</label>
+        <input type="file" id="hostelFile" name="hostelFile" accept=".csv" required><br><br>
+        <button type="submit">Upload and Allocate</button>
+    </form>
+</body>
+</html>
+Run the Application:
+Execute the Flask application using Python.
+
+bash
+Copy code
+python app.py
+Access the Application:
+Open your web browser and navigate to http://127.0.0.1:5000/. You should see the form to upload your CSV files.
+
+Upload CSV Files and Allocate Rooms:
+Use the web interface to upload the group and hostel information CSV files. After submitting, the application will process the files and generate the allocation result, which you can download as a CSV file.
+
+Example CSV Files
+Group Information CSV (groups.csv):
+
+sql
+Copy code
+Group ID,Members,Gender
+101,3,Boys
+102,4,Girls
+103,2,Boys
+104,5,Girls
+105,8,5 Boys & 3 Girls
+Hostel Information CSV (hostels.csv):
+
+css
+Copy code
+Hostel Name,Room Number,Capacity,Gender
+Boys Hostel A,101,3,Boys
+Boys Hostel A,102,4,Boys
+Girls Hostel B,201,2,Girls
+Girls Hostel B,202,5,Girls
+Upload these files through the web interface to test the allocation functionality.
+
+Additional Tips
+Ensure the CSV files are properly formatted and match the expected structure.
+Use appropriate error handling to manage edge cases and invalid inputs.
+Customize the UI to improve user experience.
+By following these steps, you should be able to set up and run the web application successfully.
